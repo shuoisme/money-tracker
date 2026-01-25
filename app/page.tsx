@@ -276,7 +276,7 @@ export default function MobileExpenseApp() {
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-yellow-300 rounded-full opacity-50"></div>
           <div className="text-center mb-8 relative z-10">
             <div className="w-24 h-24 mx-auto mb-4"><img src={IMAGES.headerDecor} className="w-full h-full object-contain" /></div>
-            <h1 className="text-3xl font-black text-slate-800 mb-2">柴柴記帳 V4</h1>
+            <h1 className="text-3xl font-black text-slate-800 mb-2">柴柴記帳本</h1>
             <p className="text-slate-500 font-medium">輸入你的專屬狗屋 ID</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
