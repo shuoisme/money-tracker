@@ -50,7 +50,7 @@ export default function MobileExpenseApp() {
   const [loading, setLoading] = useState(false);
   const [members, setMembers] = useState(['我', 'Snoopy']); 
 
-  // --- 編輯功能新增的狀態 ---
+  // --- 編輯功能狀態 ---
   const [editingTx, setEditingTx] = useState<any>(null);
 
   // 記帳表單狀態
@@ -61,7 +61,7 @@ export default function MobileExpenseApp() {
   const [inputDesc, setInputDesc] = useState('');
   const [userName, setUserName] = useState('');
 
-  // 動畫控制狀態
+  // 動畫控制
   const [showReward, setShowReward] = useState(false);
   const [rewardType, setRewardType] = useState<'income' | 'expense'>('expense');
 
@@ -109,7 +109,6 @@ export default function MobileExpenseApp() {
   };
 
   async function fetchTransactions(targetWalletId: string) {
-    // 這裡不設 loading，避免畫面一直閃爍
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
@@ -118,7 +117,7 @@ export default function MobileExpenseApp() {
     if (!error) setTransactions(data || []);
   }
 
-  // --- 核心：開啟編輯模式 ---
+  // --- 開啟編輯 ---
   const openEdit = (t: any) => {
     setEditingTx(t);
     setInputAmount(Math.abs(t.amount).toString());
@@ -136,7 +135,7 @@ export default function MobileExpenseApp() {
     setViewState('add');
   };
 
-  // --- 核心：開啟新增模式 ---
+  // --- 開啟新增 ---
   const openAdd = () => {
     setEditingTx(null);
     setInputAmount('');
@@ -146,7 +145,7 @@ export default function MobileExpenseApp() {
     setViewState('add');
   };
 
-  // --- 核心：儲存 (包含新增與修改 - 修復版) ---
+  // --- ★核心修改：先斬後奏儲存法★ ---
   async function handleSave() {
     if (!inputAmount) return;
     setLoading(true);
@@ -158,22 +157,18 @@ export default function MobileExpenseApp() {
     const finalDesc = inputDesc || selectedCategory.name;
     const finalUser = userName || members[0];
 
+    // 1. 先去資料庫存 (等待結果)
     let error;
-
     if (editingTx) {
-      // 編輯模式
-      const res = await supabase.from('transactions')
-        .update({
+      const res = await supabase.from('transactions').update({
           desc_text: finalDesc, 
           amount: finalAmount,
           category: selectedCategory.name,
           date_text: inputDate,
           user_name: finalUser 
-        })
-        .eq('id', editingTx.id);
+        }).eq('id', editingTx.id);
       error = res.error;
     } else {
-      // 新增模式
       const res = await supabase.from('transactions').insert([{ 
         wallet_id: walletId,
         desc_text: finalDesc, 
@@ -188,11 +183,32 @@ export default function MobileExpenseApp() {
     if (error) {
       alert('儲存失敗！' + error.message);
     } else {
-      // ★ 關鍵修改：儲存成功後，強制手動更新一次列表 ★
-      await fetchTransactions(walletId);
+      // 2. ★關鍵修改：不管資料庫有沒有回傳，我們先「手動」把畫面上的資料改掉！
+      // 這樣保證畫面一定會變，不會有時間差
+      const manualTx = {
+        id: editingTx ? editingTx.id : 'temp-' + Date.now(), // 如果是新增，暫時給個假ID顯示
+        desc_text: finalDesc,
+        amount: finalAmount,
+        category: selectedCategory.name,
+        date_text: inputDate,
+        user_name: finalUser,
+        created_at: new Date().toISOString(),
+        wallet_id: walletId
+      };
 
-      if (!editingTx) triggerRewardAnimation(txType);
-      
+      if (editingTx) {
+        // 如果是編輯，用 map 找到那一筆換掉
+        setTransactions(prev => prev.map(t => t.id === editingTx.id ? { ...t, ...manualTx } : t));
+      } else {
+        // 如果是新增，直接加到最上面
+        setTransactions(prev => [manualTx, ...prev]);
+        triggerRewardAnimation(txType);
+      }
+
+      // 3. 做完這步後，再去背景偷偷更新確認一次 (雙重保險)
+      fetchTransactions(walletId);
+
+      // 4. 回首頁
       openAdd(); 
       setViewState('home'); 
     }
@@ -218,9 +234,12 @@ export default function MobileExpenseApp() {
   async function handleDelete(e: any, id: any) {
     e.stopPropagation();
     if(!confirm('要刪掉這筆紀錄嗎？')) return;
+    
+    // 刪除也用一樣的技巧：先從畫面拿掉，再刪資料庫
+    setTransactions(prev => prev.filter(t => t.id !== id));
+    
     await supabase.from('transactions').delete().eq('id', id);
-    // ★ 刪除後也強制更新
-    await fetchTransactions(walletId);
+    fetchTransactions(walletId);
   }
 
   const addMember = () => {
