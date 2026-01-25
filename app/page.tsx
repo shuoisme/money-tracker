@@ -263,7 +263,7 @@ export default function MobileExpenseApp() {
             <div className="w-24 h-24 mx-auto mb-4">
                <img src={IMAGES.headerDecor} className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-3xl font-black text-slate-800 mb-2">Snoopy 帳本</h1>
+            <h1 className="text-3xl font-black text-slate-800 mb-2">記帳本</h1>
             <p className="text-slate-500 font-medium">輸入你的專屬狗屋 ID</p>
           </div>
           
