@@ -74,7 +74,7 @@ export default function MobileExpenseApp() {
       setIsLoggedIn(true);
       if (savedMembers) setMembers(JSON.parse(savedMembers));
       fetchTransactions(savedWallet);
-      setupRealtime(savedWallet);
+      // ★ 注意：這裡移除了 realtime，避免它跟手動更新打架
     }
     setInputDate(new Date().toISOString().split('T')[0]);
   }, []);
@@ -87,7 +87,6 @@ export default function MobileExpenseApp() {
     localStorage.setItem('my_wallet_id', cleanId);
     setIsLoggedIn(true);
     fetchTransactions(cleanId);
-    setupRealtime(cleanId);
   };
 
   const handleLogout = () => {
@@ -98,36 +97,36 @@ export default function MobileExpenseApp() {
     setTransactions([]);
   };
 
-  const setupRealtime = (targetWalletId: string) => {
-    const channel = supabase
-      .channel(`realtime:${targetWalletId}`)
-      .on('postgres_changes', { 
-        event: '*', schema: 'public', table: 'transactions', filter: `wallet_id=eq.${targetWalletId}` 
-      }, () => fetchTransactions(targetWalletId))
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  };
-
+  // ★ 穩定版核心：純粹的讀取資料，不搞花俏的同步
   async function fetchTransactions(targetWalletId: string) {
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
       .eq('wallet_id', targetWalletId)
-      .order('created_at', { ascending: false });
-    if (!error) setTransactions(data || []);
+      .order('created_at', { ascending: false }); // 確保最新的在上面
+    
+    if (error) {
+        console.error("讀取失敗:", error);
+    } else {
+        // 強制刷新列表
+        setTransactions(data || []);
+    }
   }
 
   // --- 開啟編輯 ---
   const openEdit = (t: any) => {
     setEditingTx(t);
+    // 填入資料
     setInputAmount(Math.abs(t.amount).toString());
     setInputDesc(t.desc_text);
     setInputDate(t.date_text);
     setUserName(t.user_name);
     
+    // 設定收支類型
     const type = t.amount < 0 ? 'expense' : 'income';
     setTxType(type);
     
+    // 設定分類
     const catList = type === 'expense' ? CATEGORIES.expense : CATEGORIES.income;
     const foundCat = catList.find((c: any) => c.name === t.category) || catList[0];
     setSelectedCategory(foundCat);
@@ -145,10 +144,10 @@ export default function MobileExpenseApp() {
     setViewState('add');
   };
 
-  // --- ★核心修改：先斬後奏儲存法★ ---
+  // --- ★ 核心：最穩定的儲存邏輯 ---
   async function handleSave() {
     if (!inputAmount) return;
-    setLoading(true);
+    setLoading(true); // 1. 開始轉圈圈，避免使用者亂按
     
     let finalAmount = parseFloat(inputAmount);
     if (txType === 'expense') finalAmount = -Math.abs(finalAmount);
@@ -157,18 +156,23 @@ export default function MobileExpenseApp() {
     const finalDesc = inputDesc || selectedCategory.name;
     const finalUser = userName || members[0];
 
-    // 1. 先去資料庫存 (等待結果)
     let error;
+
+    // 2. 等待資料庫回應 (Await)
     if (editingTx) {
-      const res = await supabase.from('transactions').update({
+      // 如果是編輯 -> 更新該 ID
+      const res = await supabase.from('transactions')
+        .update({
           desc_text: finalDesc, 
           amount: finalAmount,
           category: selectedCategory.name,
           date_text: inputDate,
           user_name: finalUser 
-        }).eq('id', editingTx.id);
+        })
+        .eq('id', editingTx.id); // 確保 ID 正確
       error = res.error;
     } else {
+      // 如果是新增
       const res = await supabase.from('transactions').insert([{ 
         wallet_id: walletId,
         desc_text: finalDesc, 
@@ -181,38 +185,19 @@ export default function MobileExpenseApp() {
     }
 
     if (error) {
-      alert('儲存失敗！' + error.message);
+      alert('儲存失敗！\n' + error.message);
+      setLoading(false);
     } else {
-      // 2. ★關鍵修改：不管資料庫有沒有回傳，我們先「手動」把畫面上的資料改掉！
-      // 這樣保證畫面一定會變，不會有時間差
-      const manualTx = {
-        id: editingTx ? editingTx.id : 'temp-' + Date.now(), // 如果是新增，暫時給個假ID顯示
-        desc_text: finalDesc,
-        amount: finalAmount,
-        category: selectedCategory.name,
-        date_text: inputDate,
-        user_name: finalUser,
-        created_at: new Date().toISOString(),
-        wallet_id: walletId
-      };
-
-      if (editingTx) {
-        // 如果是編輯，用 map 找到那一筆換掉
-        setTransactions(prev => prev.map(t => t.id === editingTx.id ? { ...t, ...manualTx } : t));
-      } else {
-        // 如果是新增，直接加到最上面
-        setTransactions(prev => [manualTx, ...prev]);
-        triggerRewardAnimation(txType);
-      }
-
-      // 3. 做完這步後，再去背景偷偷更新確認一次 (雙重保險)
-      fetchTransactions(walletId);
-
-      // 4. 回首頁
+      // 3. 成功後，強制重新去資料庫抓最新的資料
+      await fetchTransactions(walletId);
+      
+      // 4. 放煙火、回首頁
+      if (!editingTx) triggerRewardAnimation(txType);
+      
       openAdd(); 
       setViewState('home'); 
+      setLoading(false); // 結束轉圈圈
     }
-    setLoading(false);
   }
 
   const triggerRewardAnimation = (type: 'income' | 'expense') => {
@@ -235,11 +220,12 @@ export default function MobileExpenseApp() {
     e.stopPropagation();
     if(!confirm('要刪掉這筆紀錄嗎？')) return;
     
-    // 刪除也用一樣的技巧：先從畫面拿掉，再刪資料庫
-    setTransactions(prev => prev.filter(t => t.id !== id));
-    
+    setLoading(true);
+    // 刪除
     await supabase.from('transactions').delete().eq('id', id);
-    fetchTransactions(walletId);
+    // 重新抓取
+    await fetchTransactions(walletId);
+    setLoading(false);
   }
 
   const addMember = () => {
@@ -290,7 +276,7 @@ export default function MobileExpenseApp() {
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-yellow-300 rounded-full opacity-50"></div>
           <div className="text-center mb-8 relative z-10">
             <div className="w-24 h-24 mx-auto mb-4"><img src={IMAGES.headerDecor} className="w-full h-full object-contain" /></div>
-            <h1 className="text-3xl font-black text-slate-800 mb-2">柴柴記帳本</h1>
+            <h1 className="text-3xl font-black text-slate-800 mb-2">柴柴記帳 V4</h1>
             <p className="text-slate-500 font-medium">輸入你的專屬狗屋 ID</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -376,7 +362,6 @@ export default function MobileExpenseApp() {
     );
   }
 
-  // 設定頁面
   if (viewState === 'settings') {
     return (
       <div className="min-h-screen bg-[#FFFDF0] flex justify-center font-sans text-slate-800">
