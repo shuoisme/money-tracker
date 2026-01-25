@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   Plus, Home, ArrowLeft, 
   Utensils, Bus, ShoppingBag, Gamepad2, Home as HomeIcon, MoreHorizontal,
-  Briefcase, Banknote, Users, LogOut, Settings, Heart, Star, Trash2, Pencil
+  Briefcase, Banknote, Users, LogOut, Settings, Heart, Star, Trash2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -51,7 +51,7 @@ export default function MobileExpenseApp() {
   const [members, setMembers] = useState(['我', 'Snoopy']); 
 
   // --- 編輯功能新增的狀態 ---
-  const [editingTx, setEditingTx] = useState<any>(null); // 用來存目前正在編輯的那筆資料
+  const [editingTx, setEditingTx] = useState<any>(null);
 
   // 記帳表單狀態
   const [txType, setTxType] = useState<'expense' | 'income'>('expense');
@@ -109,41 +109,36 @@ export default function MobileExpenseApp() {
   };
 
   async function fetchTransactions(targetWalletId: string) {
-    setLoading(true);
+    // 這裡不設 loading，避免畫面一直閃爍
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
       .eq('wallet_id', targetWalletId)
       .order('created_at', { ascending: false });
     if (!error) setTransactions(data || []);
-    setLoading(false);
   }
 
   // --- 核心：開啟編輯模式 ---
   const openEdit = (t: any) => {
-    setEditingTx(t); // 設定現在要編輯這筆
-    
-    // 把這筆資料填回表單
+    setEditingTx(t);
     setInputAmount(Math.abs(t.amount).toString());
     setInputDesc(t.desc_text);
     setInputDate(t.date_text);
     setUserName(t.user_name);
     
-    // 設定支出或收入
     const type = t.amount < 0 ? 'expense' : 'income';
     setTxType(type);
     
-    // 設定分類 (嘗試找回原本的分類圖示)
     const catList = type === 'expense' ? CATEGORIES.expense : CATEGORIES.income;
     const foundCat = catList.find((c: any) => c.name === t.category) || catList[0];
     setSelectedCategory(foundCat);
 
-    setViewState('add'); // 切換到表單頁面
+    setViewState('add');
   };
 
-  // --- 核心：開啟新增模式 (重置表單) ---
+  // --- 核心：開啟新增模式 ---
   const openAdd = () => {
-    setEditingTx(null); // 清空編輯狀態
+    setEditingTx(null);
     setInputAmount('');
     setInputDesc('');
     setUserName(members[0]);
@@ -151,7 +146,7 @@ export default function MobileExpenseApp() {
     setViewState('add');
   };
 
-  // --- 核心：儲存 (包含新增與修改) ---
+  // --- 核心：儲存 (包含新增與修改 - 修復版) ---
   async function handleSave() {
     if (!inputAmount) return;
     setLoading(true);
@@ -166,7 +161,7 @@ export default function MobileExpenseApp() {
     let error;
 
     if (editingTx) {
-      // 如果是編輯模式 -> 更新舊資料
+      // 編輯模式
       const res = await supabase.from('transactions')
         .update({
           desc_text: finalDesc, 
@@ -178,7 +173,7 @@ export default function MobileExpenseApp() {
         .eq('id', editingTx.id);
       error = res.error;
     } else {
-      // 如果是新增模式 -> 插入新資料
+      // 新增模式
       const res = await supabase.from('transactions').insert([{ 
         wallet_id: walletId,
         desc_text: finalDesc, 
@@ -193,11 +188,13 @@ export default function MobileExpenseApp() {
     if (error) {
       alert('儲存失敗！' + error.message);
     } else {
-      // 只有新增時才放煙火，編輯時不用
+      // ★ 關鍵修改：儲存成功後，強制手動更新一次列表 ★
+      await fetchTransactions(walletId);
+
       if (!editingTx) triggerRewardAnimation(txType);
       
-      openAdd(); // 重置表單
-      setViewState('home'); // 回到首頁
+      openAdd(); 
+      setViewState('home'); 
     }
     setLoading(false);
   }
@@ -219,9 +216,11 @@ export default function MobileExpenseApp() {
   };
 
   async function handleDelete(e: any, id: any) {
-    e.stopPropagation(); // 阻止冒泡，避免觸發編輯
+    e.stopPropagation();
     if(!confirm('要刪掉這筆紀錄嗎？')) return;
     await supabase.from('transactions').delete().eq('id', id);
+    // ★ 刪除後也強制更新
+    await fetchTransactions(walletId);
   }
 
   const addMember = () => {
@@ -358,6 +357,7 @@ export default function MobileExpenseApp() {
     );
   }
 
+  // 設定頁面
   if (viewState === 'settings') {
     return (
       <div className="min-h-screen bg-[#FFFDF0] flex justify-center font-sans text-slate-800">
@@ -425,7 +425,7 @@ export default function MobileExpenseApp() {
                 {transactions.map((t: any) => (
                   <div 
                     key={t.id} 
-                    onClick={() => openEdit(t)} // 點擊卡片 -> 開啟編輯
+                    onClick={() => openEdit(t)} 
                     className="p-4 rounded-2xl bg-white border-2 border-slate-50 hover:border-yellow-200 active:scale-95 transition-all flex items-center justify-between group cursor-pointer shadow-[0_2px_0_rgb(241,245,249)]"
                   >
                     <div className="flex items-center gap-4">
@@ -443,8 +443,6 @@ export default function MobileExpenseApp() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className={`block font-black text-lg ${t.amount > 0 ? 'text-yellow-500' : 'text-slate-800'}`}>{t.amount > 0 ? '+' : ''}{t.amount}</span>
-                      
-                      {/* 刪除按鈕 (加上 stopPropagation 避免觸發編輯) */}
                       <button 
                         onClick={(e) => handleDelete(e, t.id)} 
                         className="text-slate-300 hover:text-red-500 p-1 transition-colors"
@@ -476,7 +474,7 @@ export default function MobileExpenseApp() {
           </button>
 
           <button 
-            onClick={openAdd} // 點擊加號 -> 開啟「新增」模式
+            onClick={openAdd} 
             className="w-16 h-16 bg-yellow-400 rounded-full shadow-[0_0_20px_rgba(250,204,21,0.5)] flex items-center justify-center text-slate-900 transform -translate-y-8 transition-transform active:scale-90 hover:scale-105 border-4 border-[#FFFDF0]"
           >
             <Plus size={36} strokeWidth={4} />
