@@ -17,14 +17,14 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // --- 圖片設定 (請在這裡換成你喜歡的史努比圖片連結！) ---
 const IMAGES = {
-  // 1. 首頁頂部裝飾 (建議找背景透明的 PNG)
-  headerDecor: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYml1bHpnNTdyZmppNWc3Y2Q3bjQyc2J3d2txZWwwdTB2cjc4azZpNyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/3oFzmrk6S4UONeH04w/giphy.gif",
-  // 2. 收入時出現的動畫 (GIF)
-  incomeGif: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYml1bHpnNTdyZmppNWc3Y2Q3bjQyc2J3d2txZWwwdTB2cjc4azZpNyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3q2XXYxkdxzjMC9G/giphy.gif",
-  // 3. 支出時出現的動畫 (GIF)
-  expenseGif: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExazZld29yajhndjZ4Z3Zwb3lucndlN2Roa2dsdTUwZzgzcDBoY3U1bSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/b2EBwN2rv3ugM/giphy.gif",
-  // 4. 空狀態 (沒資料時)
-  emptyState: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExazZld29yajhndjZ4Z3Zwb3lucndlN2Roa2dsdTUwZzgzcDBoY3U1bSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/zLX2k1oLO6Uot1It2S/giphy.gif"
+  // 1. 首頁頂部裝飾 (趴著的柴犬)
+  headerDecor: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnZ3cWx6aG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0ZiZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/QaMhVhqjvixyS4fyqn/giphy.gif",
+  // 2. 收入時出現的動畫 (開心的柴犬)
+  incomeGif: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0ZiZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/alH7TEnrp9C65qO3rC/giphy.gif",
+  // 3. 支出時出現的動畫 (哭哭/委屈的柴犬)
+  expenseGif: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0ZiZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/l378giAZgxPw3eO52/giphy.gif",
+  // 4. 空狀態 (一隻蝴蝶飛過，或發呆的狗)
+  emptyState: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0ZiZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/xT1R9Z8f71t1v1K7gA/giphy.gif"
 };
 
 const CATEGORIES: any = {
@@ -259,7 +259,7 @@ export default function MobileExpenseApp() {
             <div className="w-24 h-24 mx-auto mb-4">
                <img src={IMAGES.headerDecor} className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-3xl font-black text-slate-800 mb-2">Snoopy 帳本</h1>
+            <h1 className="text-3xl font-black text-slate-800 mb-2">好運記帳本</h1>
             <p className="text-slate-500 font-medium">輸入你的專屬狗屋 ID</p>
           </div>
           
