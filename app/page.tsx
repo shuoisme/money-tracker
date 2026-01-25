@@ -16,15 +16,19 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // --- 圖片設定 (請在這裡換成你喜歡的史努比圖片連結！) ---
+// --- 圖片設定 (GIPHY Stickers - 可愛柴犬版) ---
 const IMAGES = {
-  // 1. 首頁頂部裝飾 (趴著的柴犬)
-  headerDecor: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnZ3cWx6aG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0ZiZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/QaMhVhqjvixyS4fyqn/giphy.gif",
-  // 2. 收入時出現的動畫 (開心的柴犬)
-  incomeGif: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0ZiZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/alH7TEnrp9C65qO3rC/giphy.gif",
+  // 1. 首頁頂部裝飾 (趴著搖尾巴的柴犬)
+  headerDecor: "https://media.giphy.com/media/QAUAm2O4LWh2DY8ZSP/giphy.gif",
+  
+  // 2. 收入時出現的動畫 (開心的柴犬，慶祝的感覺)
+  incomeGif: "https://media.giphy.com/media/JUTECvzw3bEq36KXY2/giphy.gif",
+  
   // 3. 支出時出現的動畫 (哭哭/委屈的柴犬)
-  expenseGif: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0ZiZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/l378giAZgxPw3eO52/giphy.gif",
-  // 4. 空狀態 (一隻蝴蝶飛過，或發呆的狗)
-  emptyState: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0aG55b3F0ZiZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/xT1R9Z8f71t1v1K7gA/giphy.gif"
+  expenseGif: "https://media.giphy.com/media/0Z3DTusFBsnAE2dIyQ/giphy.gif",
+  
+  // 4. 空狀態 (發呆/在等待的柴犬)
+  emptyState: "https://media.giphy.com/media/j0SnnVDX5cnWp4V4kR/giphy.gif"
 };
 
 const CATEGORIES: any = {
@@ -259,7 +263,7 @@ export default function MobileExpenseApp() {
             <div className="w-24 h-24 mx-auto mb-4">
                <img src={IMAGES.headerDecor} className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-3xl font-black text-slate-800 mb-2">好運記帳本</h1>
+            <h1 className="text-3xl font-black text-slate-800 mb-2">Snoopy 帳本</h1>
             <p className="text-slate-500 font-medium">輸入你的專屬狗屋 ID</p>
           </div>
           
