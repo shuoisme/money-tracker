@@ -22,7 +22,7 @@ const IMAGES = {
   incomeGif: "https://media.giphy.com/media/JUTECvzw3bEq36KXY2/giphy.gif",
   expenseGif: "https://media.giphy.com/media/0Z3DTusFBsnAE2dIyQ/giphy.gif",
   emptyState: "https://media.giphy.com/media/j0SnnVDX5cnWp4V4kR/giphy.gif",
-  warningGif: "https://media.giphy.com/media/l378giAZgxPw3eO52/giphy.gif" // 預算超標的狗
+  warningGif: "https://media.giphy.com/media/l378giAZgxPw3eO52/giphy.gif"
 };
 
 const CATEGORIES: any = {
@@ -51,10 +51,7 @@ export default function MobileExpenseApp() {
   const [loading, setLoading] = useState(false);
   
   const [accounts, setAccounts] = useState(['現金', 'LINE Pay']); 
-  // ★ 新增：預算設定 (預設 5000)
   const [monthlyBudget, setMonthlyBudget] = useState(5000);
-  
-  // ★ 新增：月份篩選 (預設為當前年月，例如 '2026-03')
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
 
   const [editingTx, setEditingTx] = useState<any>(null);
@@ -116,26 +113,23 @@ export default function MobileExpenseApp() {
     if (!error) setTransactions(data || []);
   }
 
-  // ★ 核心邏輯：計算當月資料
-  const monthlyTransactions = transactions.filter(t => t.date_text.startsWith(currentMonth));
+  const monthlyTransactions = transactions.filter((t: any) => t.date_text.startsWith(currentMonth));
   
-  // 計算當月總花費 (只算支出)
   const currentMonthExpense = Math.abs(monthlyTransactions
-    .filter(t => t.amount < 0)
-    .reduce((sum, t) => sum + t.amount, 0));
+    .filter((t: any) => t.amount < 0)
+    .reduce((sum: number, t: any) => sum + t.amount, 0));
 
   const budgetPercent = Math.min((currentMonthExpense / monthlyBudget) * 100, 100);
   const isOverBudget = currentMonthExpense > monthlyBudget;
 
-  // 計算分類統計 (視覺化圓餅圖替代方案)
+  // ★ 這裡就是 Vercel 報錯的地方，我已經加上了 :any 幫你修好了！
   const categoryStats = CATEGORIES.expense.map((cat: any) => {
       const total = Math.abs(monthlyTransactions
-          .filter(t => t.amount < 0 && t.category === cat.name)
-          .reduce((sum, t) => sum + t.amount, 0));
+          .filter((t: any) => t.amount < 0 && t.category === cat.name)
+          .reduce((sum: number, t: any) => sum + t.amount, 0));
       return { ...cat, total, percent: currentMonthExpense === 0 ? 0 : (total / currentMonthExpense) * 100 };
-  }).filter(c => c.total > 0).sort((a, b) => b.total - a.total); // 只顯示有花費的並排序
+  }).filter((c: any) => c.total > 0).sort((a: any, b: any) => b.total - a.total); 
 
-  // 月份切換按鈕
   const changeMonth = (offset: number) => {
       const [year, month] = currentMonth.split('-').map(Number);
       const date = new Date(year, month - 1 + offset, 1);
@@ -192,7 +186,6 @@ export default function MobileExpenseApp() {
     } else {
       await fetchTransactions(walletId);
       
-      // 如果超過預算，顯示警告動畫
       if (txType === 'expense' && (currentMonthExpense + Math.abs(finalAmount) > monthlyBudget)) {
           triggerRewardAnimation('warning');
       } else if (!editingTx) {
@@ -255,7 +248,7 @@ export default function MobileExpenseApp() {
   const totalAssets = transactions.reduce((acc: number, cur: any) => acc + cur.amount, 0);
 
   const accountBalances = accounts.map(accName => {
-      const balance = transactions.filter(t => t.user_name === accName).reduce((sum, t) => sum + t.amount, 0);
+      const balance = transactions.filter((t: any) => t.user_name === accName).reduce((sum: number, t: any) => sum + t.amount, 0);
       return { name: accName, balance };
   });
 
@@ -390,7 +383,6 @@ export default function MobileExpenseApp() {
                 <p className="text-3xl font-black text-slate-800 select-all">{walletId}</p>
               </div>
 
-              {/* ★ 新增：預算設定區塊 */}
               <div className="bg-white border-2 border-slate-100 p-4 rounded-2xl shadow-sm flex justify-between items-center mb-8">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"><Target size={20}/></div>
@@ -426,14 +418,12 @@ export default function MobileExpenseApp() {
         {/* === 首頁 === */}
         {viewState === 'home' && (
           <>
-            {/* 上半部：總資產卡片 */}
             <div className="bg-[#FFD700] p-6 pb-6 rounded-b-[3rem] shadow-sm relative z-10 border-b-4 border-yellow-500 shrink-0">
               <div className="absolute top-[-20px] right-[20px] w-32 h-32 z-0 pointer-events-none">
                  <img src={IMAGES.headerDecor} className="w-full h-full object-contain opacity-90 drop-shadow-lg" />
               </div>
               <div className="relative z-10 mt-6">
                 
-                {/* ★ 1. 月份篩選器 */}
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2 opacity-80 cursor-pointer w-fit px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm" onClick={() => setViewState('settings')}>
                     <span className="text-xs font-black text-slate-900 tracking-wide uppercase">{walletId}</span>
@@ -446,7 +436,6 @@ export default function MobileExpenseApp() {
                   </div>
                 </div>
 
-                {/* ★ 4. 預算進度條 */}
                 <div className="bg-white/30 p-4 rounded-3xl backdrop-blur-md border border-white/20 mb-4">
                     <div className="flex justify-between items-end mb-2">
                         <div>
@@ -459,7 +448,6 @@ export default function MobileExpenseApp() {
                             {budgetPercent.toFixed(0)}%
                         </span>
                     </div>
-                    {/* 進度條本體 */}
                     <div className="h-3 w-full bg-yellow-200/50 rounded-full overflow-hidden">
                         <div 
                           className={`h-full rounded-full transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-slate-800'}`} 
@@ -483,10 +471,8 @@ export default function MobileExpenseApp() {
               </div>
             </div>
 
-            {/* 下半部：清單區塊 */}
             <div className="flex-1 overflow-y-auto px-6 pt-6 pb-32 -mt-4 relative z-0">
               
-              {/* ★ 2. 視覺化分析 (分類比例橫條) */}
               {categoryStats.length > 0 && (
                 <div className="mb-6 bg-white rounded-3xl p-5 shadow-sm border-2 border-slate-50">
                     <div className="flex items-center gap-2 mb-4 text-slate-800 font-black">
@@ -549,7 +535,6 @@ export default function MobileExpenseApp() {
               </div>
             </div>
 
-            {/* 懸浮底部導航 */}
             <div className="absolute bottom-8 left-0 right-0 px-8 pointer-events-none z-50">
               <div className="h-20 max-w-sm mx-auto bg-slate-900 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.3)] flex items-center justify-around text-white px-2 pointer-events-auto">
                 <button onClick={() => setViewState('home')} className="p-4 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all">
