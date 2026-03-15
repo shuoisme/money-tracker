@@ -5,7 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   Plus, Home, ArrowLeft, 
   Utensils, Bus, ShoppingBag, Gamepad2, Home as HomeIcon, MoreHorizontal,
-  Briefcase, Banknote, Users, LogOut, Settings, Heart, Star, Trash2, Wallet
+  Briefcase, Banknote, Users, LogOut, Settings, Heart, Star, Trash2, Wallet,
+  ChevronLeft, ChevronRight, PieChart, Target
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,23 +21,24 @@ const IMAGES = {
   headerDecor: "https://media.giphy.com/media/QAUAm2O4LWh2DY8ZSP/giphy.gif",
   incomeGif: "https://media.giphy.com/media/JUTECvzw3bEq36KXY2/giphy.gif",
   expenseGif: "https://media.giphy.com/media/0Z3DTusFBsnAE2dIyQ/giphy.gif",
-  emptyState: "https://media.giphy.com/media/j0SnnVDX5cnWp4V4kR/giphy.gif"
+  emptyState: "https://media.giphy.com/media/j0SnnVDX5cnWp4V4kR/giphy.gif",
+  warningGif: "https://media.giphy.com/media/l378giAZgxPw3eO52/giphy.gif" // 預算超標的狗
 };
 
 const CATEGORIES: any = {
   expense: [
-    { id: 'food', name: '好吃的', icon: Utensils },
-    { id: 'transport', name: '去兜風', icon: Bus },
-    { id: 'shopping', name: '買買買', icon: ShoppingBag },
-    { id: 'entertainment', name: '玩耍', icon: Gamepad2 },
-    { id: 'housing', name: '狗窩', icon: HomeIcon },
-    { id: 'other', name: '其他', icon: MoreHorizontal },
+    { id: 'food', name: '好吃的', icon: Utensils, color: 'bg-orange-400' },
+    { id: 'transport', name: '去兜風', icon: Bus, color: 'bg-blue-400' },
+    { id: 'shopping', name: '買買買', icon: ShoppingBag, color: 'bg-pink-400' },
+    { id: 'entertainment', name: '玩耍', icon: Gamepad2, color: 'bg-purple-400' },
+    { id: 'housing', name: '狗窩', icon: HomeIcon, color: 'bg-teal-400' },
+    { id: 'other', name: '其他', icon: MoreHorizontal, color: 'bg-slate-400' },
   ],
   income: [
-    { id: 'salary', name: '薪水', icon: Briefcase },
-    { id: 'bonus', name: '獎金', icon: Banknote },
-    { id: 'invest', name: '錢滾錢', icon: Star },
-    { id: 'other', name: '撿到錢', icon: Heart },
+    { id: 'salary', name: '薪水', icon: Briefcase, color: 'bg-yellow-400' },
+    { id: 'bonus', name: '獎金', icon: Banknote, color: 'bg-yellow-500' },
+    { id: 'invest', name: '錢滾錢', icon: Star, color: 'bg-yellow-300' },
+    { id: 'other', name: '撿到錢', icon: Heart, color: 'bg-red-400' },
   ]
 };
 
@@ -48,8 +50,12 @@ export default function MobileExpenseApp() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   
-  // ★ 將原本的「成員」改為「錢包帳戶」
   const [accounts, setAccounts] = useState(['現金', 'LINE Pay']); 
+  // ★ 新增：預算設定 (預設 5000)
+  const [monthlyBudget, setMonthlyBudget] = useState(5000);
+  
+  // ★ 新增：月份篩選 (預設為當前年月，例如 '2026-03')
+  const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
 
   const [editingTx, setEditingTx] = useState<any>(null);
   const [txType, setTxType] = useState<'expense' | 'income'>('expense');
@@ -60,32 +66,28 @@ export default function MobileExpenseApp() {
   const [selectedAccount, setSelectedAccount] = useState('');
 
   const [showReward, setShowReward] = useState(false);
-  const [rewardType, setRewardType] = useState<'income' | 'expense'>('expense');
+  const [rewardType, setRewardType] = useState<'income' | 'expense' | 'warning'>('expense');
 
   useEffect(() => {
     const savedWallet = localStorage.getItem('my_wallet_id');
     const savedAccounts = localStorage.getItem('my_wallet_accounts');
+    const savedBudget = localStorage.getItem('my_wallet_budget');
     
     if (savedWallet) {
       setWalletId(savedWallet);
       setIsLoggedIn(true);
       fetchTransactions(savedWallet);
     }
-    
-    if (savedAccounts) {
-      setAccounts(JSON.parse(savedAccounts));
-    } else {
-      // 預設給兩個錢包
-      setSelectedAccount('現金'); 
-    }
+    if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
+    else setSelectedAccount('現金'); 
+
+    if (savedBudget) setMonthlyBudget(Number(savedBudget));
     
     setInputDate(new Date().toISOString().split('T')[0]);
   }, []);
 
   useEffect(() => {
-      if (accounts.length > 0 && !selectedAccount) {
-          setSelectedAccount(accounts[0]);
-      }
+      if (accounts.length > 0 && !selectedAccount) setSelectedAccount(accounts[0]);
   }, [accounts]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -114,20 +116,43 @@ export default function MobileExpenseApp() {
     if (!error) setTransactions(data || []);
   }
 
+  // ★ 核心邏輯：計算當月資料
+  const monthlyTransactions = transactions.filter(t => t.date_text.startsWith(currentMonth));
+  
+  // 計算當月總花費 (只算支出)
+  const currentMonthExpense = Math.abs(monthlyTransactions
+    .filter(t => t.amount < 0)
+    .reduce((sum, t) => sum + t.amount, 0));
+
+  const budgetPercent = Math.min((currentMonthExpense / monthlyBudget) * 100, 100);
+  const isOverBudget = currentMonthExpense > monthlyBudget;
+
+  // 計算分類統計 (視覺化圓餅圖替代方案)
+  const categoryStats = CATEGORIES.expense.map((cat: any) => {
+      const total = Math.abs(monthlyTransactions
+          .filter(t => t.amount < 0 && t.category === cat.name)
+          .reduce((sum, t) => sum + t.amount, 0));
+      return { ...cat, total, percent: currentMonthExpense === 0 ? 0 : (total / currentMonthExpense) * 100 };
+  }).filter(c => c.total > 0).sort((a, b) => b.total - a.total); // 只顯示有花費的並排序
+
+  // 月份切換按鈕
+  const changeMonth = (offset: number) => {
+      const [year, month] = currentMonth.split('-').map(Number);
+      const date = new Date(year, month - 1 + offset, 1);
+      setCurrentMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+  };
+
   const openEdit = (t: any) => {
     setEditingTx(t);
     setInputAmount(Math.abs(t.amount).toString());
     setInputDesc(t.desc_text);
     setInputDate(t.date_text);
     setSelectedAccount(t.user_name || accounts[0]); 
-    
     const type = t.amount < 0 ? 'expense' : 'income';
     setTxType(type);
-    
     const catList = type === 'expense' ? CATEGORIES.expense : CATEGORIES.income;
     const foundCat = catList.find((c: any) => c.name === t.category) || catList[0];
     setSelectedCategory(foundCat);
-
     setViewState('add');
   };
 
@@ -143,35 +168,21 @@ export default function MobileExpenseApp() {
   async function handleSave() {
     if (!inputAmount) return;
     setLoading(true);
-    
     let finalAmount = parseFloat(inputAmount);
     if (txType === 'expense') finalAmount = -Math.abs(finalAmount);
     else finalAmount = Math.abs(finalAmount);
-
     const finalDesc = inputDesc || selectedCategory.name;
     const finalAccount = selectedAccount || accounts[0];
 
     let error;
-
     if (editingTx) {
-      const res = await supabase.from('transactions')
-        .update({
-          desc_text: finalDesc, 
-          amount: finalAmount,
-          category: selectedCategory.name,
-          date_text: inputDate,
-          user_name: finalAccount // 將帳戶名稱存在 user_name 欄位
-        })
-        .eq('id', editingTx.id);
+      const res = await supabase.from('transactions').update({
+          desc_text: finalDesc, amount: finalAmount, category: selectedCategory.name, date_text: inputDate, user_name: finalAccount 
+        }).eq('id', editingTx.id);
       error = res.error;
     } else {
       const res = await supabase.from('transactions').insert([{ 
-        wallet_id: walletId,
-        desc_text: finalDesc, 
-        amount: finalAmount,
-        category: selectedCategory.name,
-        date_text: inputDate,
-        user_name: finalAccount 
+        wallet_id: walletId, desc_text: finalDesc, amount: finalAmount, category: selectedCategory.name, date_text: inputDate, user_name: finalAccount 
       }]);
       error = res.error;
     }
@@ -180,26 +191,40 @@ export default function MobileExpenseApp() {
       alert('儲存失敗！\n' + error.message);
     } else {
       await fetchTransactions(walletId);
-      if (!editingTx) triggerRewardAnimation(txType);
+      
+      // 如果超過預算，顯示警告動畫
+      if (txType === 'expense' && (currentMonthExpense + Math.abs(finalAmount) > monthlyBudget)) {
+          triggerRewardAnimation('warning');
+      } else if (!editingTx) {
+          triggerRewardAnimation(txType);
+      }
+      
       openAdd(); 
       setViewState('home'); 
     }
     setLoading(false);
   }
 
-  const triggerRewardAnimation = (type: 'income' | 'expense') => {
+  const saveBudget = () => {
+      const newBudget = prompt('請輸入你每個月的預算金額：', monthlyBudget.toString());
+      if (newBudget && !isNaN(Number(newBudget))) {
+          setMonthlyBudget(Number(newBudget));
+          localStorage.setItem('my_wallet_budget', newBudget);
+      }
+  };
+
+  const triggerRewardAnimation = (type: 'income' | 'expense' | 'warning') => {
     setRewardType(type);
     setShowReward(true);
     if (type === 'income') {
-      const duration = 2000;
-      const end = Date.now() + duration;
+      const end = Date.now() + 2000;
       (function frame() {
         confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#FFD700', '#FFA500', '#ffffff'] });
         confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#FFD700', '#FFA500', '#ffffff'] });
         if (Date.now() < end) requestAnimationFrame(frame);
       }());
     }
-    setTimeout(() => { setShowReward(false); }, 2500);
+    setTimeout(() => { setShowReward(false); }, type === 'warning' ? 3500 : 2500);
   };
 
   async function handleDelete(e: any, id: any) {
@@ -219,7 +244,6 @@ export default function MobileExpenseApp() {
       localStorage.setItem('my_wallet_accounts', JSON.stringify(newAccounts));
     }
   };
-
   const removeAccount = (target: string) => {
     if (accounts.length <= 1) return alert('至少要留一個錢包喔！');
     if (!confirm(`確定要刪除 ${target} 嗎？(舊紀錄仍會保留此標籤)`)) return;
@@ -230,11 +254,8 @@ export default function MobileExpenseApp() {
 
   const totalAssets = transactions.reduce((acc: number, cur: any) => acc + cur.amount, 0);
 
-  // ★ 計算各錢包餘額
   const accountBalances = accounts.map(accName => {
-      const balance = transactions
-          .filter(t => t.user_name === accName)
-          .reduce((sum, t) => sum + t.amount, 0);
+      const balance = transactions.filter(t => t.user_name === accName).reduce((sum, t) => sum + t.amount, 0);
       return { name: accName, balance };
   });
 
@@ -248,10 +269,16 @@ export default function MobileExpenseApp() {
         >
           <motion.div 
             initial={{ scale: 0.5, y: 100 }} animate={{ scale: 1, y: 0 }}
-            className="bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center max-w-xs mx-4"
+            className="bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center max-w-xs mx-4 text-center"
           >
-            <img src={rewardType === 'income' ? IMAGES.incomeGif : IMAGES.expenseGif} alt="Animation" className="w-48 h-48 object-contain mb-4"/>
-            <h3 className="text-xl font-bold text-slate-800">{rewardType === 'income' ? '太棒了！賺錢啦！🎉' : '紀錄完成！摸摸頭 🐶'}</h3>
+            <img 
+               src={rewardType === 'income' ? IMAGES.incomeGif : (rewardType === 'warning' ? IMAGES.warningGif : IMAGES.expenseGif)} 
+               className="w-48 h-48 object-contain mb-4"
+            />
+            <h3 className={`text-xl font-bold ${rewardType === 'warning' ? 'text-red-500' : 'text-slate-800'}`}>
+                {rewardType === 'income' ? '太棒了！賺錢啦！🎉' : (rewardType === 'warning' ? '警告！預算超標啦！🚨' : '紀錄完成！摸摸頭 🐶')}
+            </h3>
+            {rewardType === 'warning' && <p className="text-sm text-slate-500 mt-2 font-bold">手下留情啊，快沒錢買罐罐了！</p>}
           </motion.div>
         </motion.div>
       )}
@@ -277,7 +304,6 @@ export default function MobileExpenseApp() {
     );
   }
 
-  // ★ 注意這裡的 h-[100dvh] overflow-hidden：這就是固定底部選單的魔法
   return (
     <div className="h-[100dvh] bg-[#FFFDF0] flex justify-center font-sans text-slate-800 overflow-hidden">
       <RewardOverlay />
@@ -356,13 +382,27 @@ export default function MobileExpenseApp() {
               <button onClick={() => setViewState('home')} className="p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full"><ArrowLeft size={24}/></button>
               <h2 className="text-2xl font-black ml-2">設定狗窩</h2>
             </div>
+            
             <div className="mb-8">
-              <div className="bg-yellow-50 p-6 rounded-3xl border-2 border-yellow-100 text-center relative overflow-hidden">
+              <div className="bg-yellow-50 p-6 rounded-3xl border-2 border-yellow-100 text-center relative overflow-hidden mb-4">
                  <div className="absolute top-[-20px] right-[-20px] w-20 h-20 bg-yellow-200 rounded-full opacity-50"></div>
                 <p className="text-xs font-bold text-yellow-600 mb-1 uppercase tracking-wider">Wallet ID</p>
                 <p className="text-3xl font-black text-slate-800 select-all">{walletId}</p>
               </div>
+
+              {/* ★ 新增：預算設定區塊 */}
+              <div className="bg-white border-2 border-slate-100 p-4 rounded-2xl shadow-sm flex justify-between items-center mb-8">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"><Target size={20}/></div>
+                    <div>
+                        <p className="font-bold text-slate-800">每月預算</p>
+                        <p className="text-sm text-slate-400 font-black">${monthlyBudget}</p>
+                    </div>
+                </div>
+                <button onClick={saveBudget} className="text-sm bg-slate-100 text-slate-600 px-4 py-2 rounded-full font-bold hover:bg-slate-200">修改</button>
+              </div>
             </div>
+
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-lg text-slate-700">管理我的錢包</h3>
@@ -386,21 +426,53 @@ export default function MobileExpenseApp() {
         {/* === 首頁 === */}
         {viewState === 'home' && (
           <>
-            {/* 上半部：總資產卡片 (固定不捲動) */}
-            <div className="bg-[#FFD700] p-6 pb-12 rounded-b-[3rem] shadow-sm relative z-10 border-b-4 border-yellow-500 shrink-0">
+            {/* 上半部：總資產卡片 */}
+            <div className="bg-[#FFD700] p-6 pb-6 rounded-b-[3rem] shadow-sm relative z-10 border-b-4 border-yellow-500 shrink-0">
               <div className="absolute top-[-20px] right-[20px] w-32 h-32 z-0 pointer-events-none">
                  <img src={IMAGES.headerDecor} className="w-full h-full object-contain opacity-90 drop-shadow-lg" />
               </div>
               <div className="relative z-10 mt-6">
-                <div className="flex items-center gap-2 mb-2 opacity-80 cursor-pointer w-fit px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm" onClick={() => setViewState('settings')}>
-                  <span className="text-xs font-black text-slate-900 tracking-wide uppercase">{walletId}</span>
-                  <Settings size={12} className="text-slate-900"/>
-                </div>
-                <h1 className="text-6xl font-black mb-1 text-slate-900 tracking-tighter drop-shadow-sm">${totalAssets.toLocaleString()}</h1>
-                <div className="text-sm font-bold text-slate-800 opacity-70 mb-4">目前總資產</div>
                 
-                {/* 各錢包餘額小標籤 */}
+                {/* ★ 1. 月份篩選器 */}
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2 opacity-80 cursor-pointer w-fit px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm" onClick={() => setViewState('settings')}>
+                    <span className="text-xs font-black text-slate-900 tracking-wide uppercase">{walletId}</span>
+                    <Settings size={12} className="text-slate-900"/>
+                  </div>
+                  <div className="flex items-center gap-3 bg-white/30 px-3 py-1.5 rounded-full backdrop-blur-md">
+                      <button onClick={() => changeMonth(-1)} className="text-slate-800 hover:bg-white/50 rounded-full p-0.5"><ChevronLeft size={16}/></button>
+                      <span className="text-sm font-black text-slate-900">{currentMonth.replace('-', ' / ')}</span>
+                      <button onClick={() => changeMonth(1)} className="text-slate-800 hover:bg-white/50 rounded-full p-0.5"><ChevronRight size={16}/></button>
+                  </div>
+                </div>
+
+                {/* ★ 4. 預算進度條 */}
+                <div className="bg-white/30 p-4 rounded-3xl backdrop-blur-md border border-white/20 mb-4">
+                    <div className="flex justify-between items-end mb-2">
+                        <div>
+                            <p className="text-xs font-bold text-slate-800 opacity-70 mb-1">本月花費 / 預算</p>
+                            <p className="text-2xl font-black text-slate-900">
+                                ${currentMonthExpense.toLocaleString()} <span className="text-sm opacity-50">/ {monthlyBudget}</span>
+                            </p>
+                        </div>
+                        <span className={`text-xs font-black px-2 py-1 rounded-lg ${isOverBudget ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>
+                            {budgetPercent.toFixed(0)}%
+                        </span>
+                    </div>
+                    {/* 進度條本體 */}
+                    <div className="h-3 w-full bg-yellow-200/50 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-slate-800'}`} 
+                          style={{ width: `${budgetPercent}%` }} 
+                        />
+                    </div>
+                </div>
+                
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  <div className="bg-slate-900 text-white px-3 py-1.5 rounded-xl whitespace-nowrap border border-slate-800">
+                      <span className="text-xs font-bold opacity-80">總資產</span>
+                      <span className="ml-2 text-sm font-black">${totalAssets.toLocaleString()}</span>
+                  </div>
                   {accountBalances.map(acc => (
                     <div key={acc.name} className="bg-white/30 px-3 py-1.5 rounded-xl backdrop-blur-md whitespace-nowrap border border-white/20">
                       <span className="text-xs font-bold text-slate-800 opacity-80">{acc.name}</span>
@@ -411,14 +483,37 @@ export default function MobileExpenseApp() {
               </div>
             </div>
 
-            {/* 下半部：清單區塊 (獨立捲動區) */}
-            <div className="flex-1 overflow-y-auto px-6 pt-6 pb-32 -mt-8 relative z-0">
-              <div className="bg-white rounded-[2rem] p-4 shadow-xl border border-slate-100 min-h-full">
-                {loading && transactions.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-2"><div className="w-8 h-8 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div><p className="font-bold">柴柴正在搬資料...</p></div>
+            {/* 下半部：清單區塊 */}
+            <div className="flex-1 overflow-y-auto px-6 pt-6 pb-32 -mt-4 relative z-0">
+              
+              {/* ★ 2. 視覺化分析 (分類比例橫條) */}
+              {categoryStats.length > 0 && (
+                <div className="mb-6 bg-white rounded-3xl p-5 shadow-sm border-2 border-slate-50">
+                    <div className="flex items-center gap-2 mb-4 text-slate-800 font-black">
+                        <PieChart size={18}/> 本月開銷分析
+                    </div>
+                    <div className="space-y-3">
+                        {categoryStats.map(stat => (
+                            <div key={stat.name}>
+                                <div className="flex justify-between text-xs font-bold mb-1">
+                                    <span className="text-slate-500 flex items-center gap-1"><stat.icon size={12}/>{stat.name}</span>
+                                    <span className="text-slate-800">${stat.total} ({stat.percent.toFixed(0)}%)</span>
+                                </div>
+                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${stat.color || 'bg-slate-400'}`} style={{ width: `${stat.percent}%` }} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+              )}
+
+              <div className="bg-white rounded-[2rem] p-4 shadow-xl border border-slate-100 min-h-[300px]">
+                {loading && monthlyTransactions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-2"><div className="w-8 h-8 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div><p className="font-bold">柴柴正在找資料...</p></div>
                 ) : (
                   <div className="space-y-3">
-                    {transactions.map((t: any) => (
+                    {monthlyTransactions.map((t: any) => (
                       <div 
                         key={t.id} 
                         onClick={() => openEdit(t)} 
@@ -432,7 +527,7 @@ export default function MobileExpenseApp() {
                             <p className="font-black text-slate-800 text-base">{t.desc_text}</p>
                             <div className="flex items-center gap-2 text-xs text-slate-400 mt-1 font-bold">
                               <span className="bg-slate-100 px-2 py-0.5 rounded-md text-slate-500">{t.category}</span>
-                              <span className="text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-md">{t.user_name}</span> {/* 顯示錢包來源 */}
+                              <span className="text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-md">{t.user_name}</span> 
                               <span>• {t.date_text}</span>
                             </div>
                           </div>
@@ -443,10 +538,10 @@ export default function MobileExpenseApp() {
                         </div>
                       </div>
                     ))}
-                    {transactions.length === 0 && (
+                    {monthlyTransactions.length === 0 && (
                       <div className="text-center py-20 flex flex-col items-center gap-6">
                         <img src={IMAGES.emptyState} className="w-32 h-32 object-contain opacity-80" />
-                        <p className="text-slate-400 font-bold">這裡空空的<br/>快去買點好吃的吧！</p>
+                        <p className="text-slate-400 font-bold">這個月空空的<br/>真是隻省錢的好狗狗！</p>
                       </div>
                     )}
                   </div>
@@ -454,7 +549,7 @@ export default function MobileExpenseApp() {
               </div>
             </div>
 
-            {/* ★ 懸浮底部導航 (絕對固定在畫面底部) */}
+            {/* 懸浮底部導航 */}
             <div className="absolute bottom-8 left-0 right-0 px-8 pointer-events-none z-50">
               <div className="h-20 max-w-sm mx-auto bg-slate-900 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.3)] flex items-center justify-around text-white px-2 pointer-events-auto">
                 <button onClick={() => setViewState('home')} className="p-4 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all">
