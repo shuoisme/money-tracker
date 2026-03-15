@@ -50,7 +50,7 @@ export default function MobileExpenseApp() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   
-  const [accounts, setAccounts] = useState(['現金', 'LINE Pay']); 
+  const [accounts, setAccounts] = useState<string[]>(['現金', 'LINE Pay']); 
   const [monthlyBudget, setMonthlyBudget] = useState(5000);
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
 
@@ -122,7 +122,6 @@ export default function MobileExpenseApp() {
   const budgetPercent = Math.min((currentMonthExpense / monthlyBudget) * 100, 100);
   const isOverBudget = currentMonthExpense > monthlyBudget;
 
-  // ★ 這裡就是 Vercel 報錯的地方，我已經加上了 :any 幫你修好了！
   const categoryStats = CATEGORIES.expense.map((cat: any) => {
       const total = Math.abs(monthlyTransactions
           .filter((t: any) => t.amount < 0 && t.category === cat.name)
@@ -247,7 +246,7 @@ export default function MobileExpenseApp() {
 
   const totalAssets = transactions.reduce((acc: number, cur: any) => acc + cur.amount, 0);
 
-  const accountBalances = accounts.map(accName => {
+  const accountBalances = accounts.map((accName: string) => {
       const balance = transactions.filter((t: any) => t.user_name === accName).reduce((sum: number, t: any) => sum + t.amount, 0);
       return { name: accName, balance };
   });
@@ -302,7 +301,6 @@ export default function MobileExpenseApp() {
       <RewardOverlay />
       <div className="w-full max-w-md bg-white h-full shadow-2xl relative flex flex-col">
         
-        {/* === 新增/修改頁面 === */}
         {viewState === 'add' && (
           <div className="flex-1 flex flex-col h-full bg-[#FFFDF0]">
             <div className="flex items-center p-4">
@@ -345,7 +343,7 @@ export default function MobileExpenseApp() {
                 <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 overflow-x-auto">
                   <label className="text-sm font-bold text-slate-400 whitespace-nowrap"><Wallet size={16} className="inline mr-1"/>錢包</label>
                   <div className="flex gap-2">
-                    {accounts.map(name => (
+                    {accounts.map((name: string) => (
                       <button key={name} onClick={() => setSelectedAccount(name)} className={`px-4 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition-colors border-2 ${selectedAccount === name ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-slate-200 text-slate-400'}`}>{name}</button>
                     ))}
                   </div>
@@ -368,7 +366,6 @@ export default function MobileExpenseApp() {
           </div>
         )}
 
-        {/* === 設定頁面 === */}
         {viewState === 'settings' && (
           <div className="flex-1 overflow-y-auto p-6 bg-[#FFFDF0]">
             <div className="flex items-center mb-8">
@@ -401,7 +398,7 @@ export default function MobileExpenseApp() {
                 <button onClick={addAccount} className="text-sm bg-slate-800 text-white px-4 py-2 rounded-full font-bold flex items-center gap-1 hover:bg-slate-700"><Plus size={16}/> 新增</button>
               </div>
               <div className="space-y-3">
-                {accounts.map(m => (
+                {accounts.map((m: string) => (
                   <div key={m} className="flex justify-between items-center bg-white border-2 border-slate-100 p-4 rounded-2xl shadow-sm">
                     <span className="font-bold text-lg flex items-center gap-2"><Wallet size={18} className="text-slate-400"/> {m}</span>
                     <button onClick={() => removeAccount(m)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 size={18}/></button>
@@ -415,7 +412,6 @@ export default function MobileExpenseApp() {
           </div>
         )}
 
-        {/* === 首頁 === */}
         {viewState === 'home' && (
           <>
             <div className="bg-[#FFD700] p-6 pb-6 rounded-b-[3rem] shadow-sm relative z-10 border-b-4 border-yellow-500 shrink-0">
@@ -461,7 +457,7 @@ export default function MobileExpenseApp() {
                       <span className="text-xs font-bold opacity-80">總資產</span>
                       <span className="ml-2 text-sm font-black">${totalAssets.toLocaleString()}</span>
                   </div>
-                  {accountBalances.map(acc => (
+                  {accountBalances.map((acc: any) => (
                     <div key={acc.name} className="bg-white/30 px-3 py-1.5 rounded-xl backdrop-blur-md whitespace-nowrap border border-white/20">
                       <span className="text-xs font-bold text-slate-800 opacity-80">{acc.name}</span>
                       <span className="ml-2 text-sm font-black text-slate-900">${acc.balance.toLocaleString()}</span>
@@ -479,7 +475,7 @@ export default function MobileExpenseApp() {
                         <PieChart size={18}/> 本月開銷分析
                     </div>
                     <div className="space-y-3">
-                        {categoryStats.map(stat => (
+                        {categoryStats.map((stat: any) => (
                             <div key={stat.name}>
                                 <div className="flex justify-between text-xs font-bold mb-1">
                                     <span className="text-slate-500 flex items-center gap-1"><stat.icon size={12}/>{stat.name}</span>
