@@ -6,7 +6,7 @@ import {
   Plus, Home, ArrowLeft, 
   Utensils, Bus, ShoppingBag, Gamepad2, Home as HomeIcon, MoreHorizontal,
   Briefcase, Banknote, Users, LogOut, Settings, Heart, Star, Trash2, Wallet,
-  ChevronLeft, ChevronRight, PieChart, Target
+  ChevronLeft, ChevronRight, PieChart, Target, CalendarDays
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,7 +16,6 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// --- 圖片設定 ---
 const IMAGES = {
   headerDecor: "https://media.giphy.com/media/QAUAm2O4LWh2DY8ZSP/giphy.gif",
   incomeGif: "https://media.giphy.com/media/JUTECvzw3bEq36KXY2/giphy.gif",
@@ -42,6 +41,22 @@ const CATEGORIES: any = {
   ]
 };
 
+// 取得本週的起訖日期 (週一 ~ 週日)
+const getLocalWeekDates = () => {
+  const now = new Date();
+  const day = now.getDay() || 7; // 將週日(0)轉換為7
+  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
+  const sun = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 7);
+  
+  const toStr = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dd}`;
+  };
+  return { start: toStr(mon), end: toStr(sun) };
+};
+
 export default function MobileExpenseApp() {
   const [walletId, setWalletId] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -51,7 +66,8 @@ export default function MobileExpenseApp() {
   const [loading, setLoading] = useState(false);
   
   const [accounts, setAccounts] = useState<string[]>(['現金', 'LINE Pay']); 
-  const [monthlyBudget, setMonthlyBudget] = useState(5000);
+  // ★ 改為週預算 (預設 2500)
+  const [weeklyBudget, setWeeklyBudget] = useState(2500);
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
 
   const [editingTx, setEditingTx] = useState<any>(null);
@@ -68,7 +84,7 @@ export default function MobileExpenseApp() {
   useEffect(() => {
     const savedWallet = localStorage.getItem('my_wallet_id');
     const savedAccounts = localStorage.getItem('my_wallet_accounts');
-    const savedBudget = localStorage.getItem('my_wallet_budget');
+    const savedBudget = localStorage.getItem('my_wallet_weekly_budget');
     
     if (savedWallet) {
       setWalletId(savedWallet);
@@ -78,7 +94,7 @@ export default function MobileExpenseApp() {
     if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
     else setSelectedAccount('現金'); 
 
-    if (savedBudget) setMonthlyBudget(Number(savedBudget));
+    if (savedBudget) setWeeklyBudget(Number(savedBudget));
     
     setInputDate(new Date().toISOString().split('T')[0]);
   }, []);
@@ -113,14 +129,22 @@ export default function MobileExpenseApp() {
     if (!error) setTransactions(data || []);
   }
 
-  const monthlyTransactions = transactions.filter((t: any) => t.date_text.startsWith(currentMonth));
+  // === 統計資料計算 ===
   
+  // 1. 本週資料計算 (永遠以現實時間為主)
+  const { start: weekStart, end: weekEnd } = getLocalWeekDates();
+  const currentWeekExpense = Math.abs(transactions
+    .filter((t: any) => t.date_text >= weekStart && t.date_text <= weekEnd && t.amount < 0)
+    .reduce((sum: number, t: any) => sum + t.amount, 0));
+  
+  const budgetPercent = Math.min((currentWeekExpense / weeklyBudget) * 100, 100);
+  const isOverBudget = currentWeekExpense > weeklyBudget;
+
+  // 2. 本月資料計算 (根據使用者選擇的月份)
+  const monthlyTransactions = transactions.filter((t: any) => t.date_text.startsWith(currentMonth));
   const currentMonthExpense = Math.abs(monthlyTransactions
     .filter((t: any) => t.amount < 0)
     .reduce((sum: number, t: any) => sum + t.amount, 0));
-
-  const budgetPercent = Math.min((currentMonthExpense / monthlyBudget) * 100, 100);
-  const isOverBudget = currentMonthExpense > monthlyBudget;
 
   const categoryStats = CATEGORIES.expense.map((cat: any) => {
       const total = Math.abs(monthlyTransactions
@@ -135,6 +159,7 @@ export default function MobileExpenseApp() {
       setCurrentMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
   };
 
+  // === 功能函式 ===
   const openEdit = (t: any) => {
     setEditingTx(t);
     setInputAmount(Math.abs(t.amount).toString());
@@ -185,7 +210,8 @@ export default function MobileExpenseApp() {
     } else {
       await fetchTransactions(walletId);
       
-      if (txType === 'expense' && (currentMonthExpense + Math.abs(finalAmount) > monthlyBudget)) {
+      // 警告改為判斷「本週是否超標」
+      if (txType === 'expense' && inputDate >= weekStart && inputDate <= weekEnd && (currentWeekExpense + Math.abs(finalAmount) > weeklyBudget)) {
           triggerRewardAnimation('warning');
       } else if (!editingTx) {
           triggerRewardAnimation(txType);
@@ -198,10 +224,10 @@ export default function MobileExpenseApp() {
   }
 
   const saveBudget = () => {
-      const newBudget = prompt('請輸入你每個月的預算金額：', monthlyBudget.toString());
+      const newBudget = prompt('請輸入你「每週」的預算金額：', weeklyBudget.toString());
       if (newBudget && !isNaN(Number(newBudget))) {
-          setMonthlyBudget(Number(newBudget));
-          localStorage.setItem('my_wallet_budget', newBudget);
+          setWeeklyBudget(Number(newBudget));
+          localStorage.setItem('my_wallet_weekly_budget', newBudget);
       }
   };
 
@@ -245,7 +271,6 @@ export default function MobileExpenseApp() {
   };
 
   const totalAssets = transactions.reduce((acc: number, cur: any) => acc + cur.amount, 0);
-
   const accountBalances = accounts.map((accName: string) => {
       const balance = transactions.filter((t: any) => t.user_name === accName).reduce((sum: number, t: any) => sum + t.amount, 0);
       return { name: accName, balance };
@@ -268,7 +293,7 @@ export default function MobileExpenseApp() {
                className="w-48 h-48 object-contain mb-4"
             />
             <h3 className={`text-xl font-bold ${rewardType === 'warning' ? 'text-red-500' : 'text-slate-800'}`}>
-                {rewardType === 'income' ? '太棒了！賺錢啦！🎉' : (rewardType === 'warning' ? '警告！預算超標啦！🚨' : '紀錄完成！摸摸頭 🐶')}
+                {rewardType === 'income' ? '太棒了！賺錢啦！🎉' : (rewardType === 'warning' ? '警告！本週超標啦！🚨' : '紀錄完成！摸摸頭 🐶')}
             </h3>
             {rewardType === 'warning' && <p className="text-sm text-slate-500 mt-2 font-bold">手下留情啊，快沒錢買罐罐了！</p>}
           </motion.div>
@@ -384,8 +409,8 @@ export default function MobileExpenseApp() {
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"><Target size={20}/></div>
                     <div>
-                        <p className="font-bold text-slate-800">每月預算</p>
-                        <p className="text-sm text-slate-400 font-black">${monthlyBudget}</p>
+                        <p className="font-bold text-slate-800">每週預算</p>
+                        <p className="text-sm text-slate-400 font-black">${weeklyBudget}</p>
                     </div>
                 </div>
                 <button onClick={saveBudget} className="text-sm bg-slate-100 text-slate-600 px-4 py-2 rounded-full font-bold hover:bg-slate-200">修改</button>
@@ -420,24 +445,22 @@ export default function MobileExpenseApp() {
               </div>
               <div className="relative z-10 mt-6">
                 
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2 opacity-80 cursor-pointer w-fit px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm" onClick={() => setViewState('settings')}>
                     <span className="text-xs font-black text-slate-900 tracking-wide uppercase">{walletId}</span>
                     <Settings size={12} className="text-slate-900"/>
                   </div>
-                  <div className="flex items-center gap-3 bg-white/30 px-3 py-1.5 rounded-full backdrop-blur-md">
-                      <button onClick={() => changeMonth(-1)} className="text-slate-800 hover:bg-white/50 rounded-full p-0.5"><ChevronLeft size={16}/></button>
-                      <span className="text-sm font-black text-slate-900">{currentMonth.replace('-', ' / ')}</span>
-                      <button onClick={() => changeMonth(1)} className="text-slate-800 hover:bg-white/50 rounded-full p-0.5"><ChevronRight size={16}/></button>
-                  </div>
                 </div>
 
+                {/* ★ 改為「本週」預算進度條 */}
                 <div className="bg-white/30 p-4 rounded-3xl backdrop-blur-md border border-white/20 mb-4">
                     <div className="flex justify-between items-end mb-2">
                         <div>
-                            <p className="text-xs font-bold text-slate-800 opacity-70 mb-1">本月花費 / 預算</p>
+                            <p className="text-xs font-bold text-slate-800 opacity-70 mb-1">
+                                本週花費 <span className="text-[10px]">({weekStart.slice(5)} ~ {weekEnd.slice(5)})</span>
+                            </p>
                             <p className="text-2xl font-black text-slate-900">
-                                ${currentMonthExpense.toLocaleString()} <span className="text-sm opacity-50">/ {monthlyBudget}</span>
+                                ${currentWeekExpense.toLocaleString()} <span className="text-sm opacity-50">/ {weeklyBudget}</span>
                             </p>
                         </div>
                         <span className={`text-xs font-black px-2 py-1 rounded-lg ${isOverBudget ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>
@@ -469,10 +492,21 @@ export default function MobileExpenseApp() {
 
             <div className="flex-1 overflow-y-auto px-6 pt-6 pb-32 -mt-4 relative z-0">
               
+              {/* ★ 下半部改為「月統計」切換區 */}
+              <div className="flex items-center justify-between mb-4 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">
+                  <div className="font-bold text-slate-800 flex items-center gap-2"><CalendarDays size={18} className="text-slate-400"/> 月度歷史檢視</div>
+                  <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+                      <button onClick={() => changeMonth(-1)} className="text-slate-800 hover:bg-slate-200 rounded-full p-0.5"><ChevronLeft size={16}/></button>
+                      <span className="text-sm font-black text-slate-900 w-16 text-center">{currentMonth.replace('-', '/')}</span>
+                      <button onClick={() => changeMonth(1)} className="text-slate-800 hover:bg-slate-200 rounded-full p-0.5"><ChevronRight size={16}/></button>
+                  </div>
+              </div>
+
               {categoryStats.length > 0 && (
                 <div className="mb-6 bg-white rounded-3xl p-5 shadow-sm border-2 border-slate-50">
-                    <div className="flex items-center gap-2 mb-4 text-slate-800 font-black">
-                        <PieChart size={18}/> 本月開銷分析
+                    <div className="flex items-center justify-between mb-4 text-slate-800 font-black">
+                        <span className="flex items-center gap-2"><PieChart size={18}/> {currentMonth.split('-')[1]}月 開銷分析</span>
+                        <span className="text-sm text-red-500 bg-red-50 px-2 py-1 rounded-md">總支出: ${currentMonthExpense.toLocaleString()}</span>
                     </div>
                     <div className="space-y-3">
                         {categoryStats.map((stat: any) => (
